@@ -1,0 +1,62 @@
+name: Build Android APK
+
+# Two ways to trigger a build:
+#   1. Manually:  Actions tab -> "Build Android APK" -> "Run workflow"
+#   2. By pushing a tag like  build-1.0.0   (git tag build-1.0.0 && git push origin build-1.0.0)
+on:
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: "Version name for this build"
+        required: false
+        default: "1.0.0"
+  push:
+    tags:
+      - 'build-*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90        # Fenix-based builds are heavy; give it room
+
+    steps:
+      # android-components is a git submodule, so we MUST clone recursively
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0       # full history so git hash / version logic works
+
+      # NOTE: If the build fails complaining about the Java/Gradle version,
+      # this is the first line to change. Try '11' instead of '17'.
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      # Sign the release APK with the auto-generated debug key.
+      # Fine for personal use; do NOT use for public distribution.
+      - name: Configure debug-key signing
+        run: echo "autosignReleaseWithDebugKey=" >> local.properties
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # The 'app:' prefix is required, otherwise the build complains it
+      # cannot locate the objcopy executable.
+      - name: Build forkRelease APKs
+        run: ./gradlew app:assemblefenixForkRelease -PversionName="${{ github.event.inputs.versionName || '1.0.0' }}"
+
+      # The ABI split produces several APKs (arm64-v8a, armeabi-v7a, x86, x86_64).
+      # For most modern phones you want the arm64-v8a one.
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: iceraven-forkRelease-apks
+          path: app/build/outputs/apk/fenix/forkRelease/*.apk
+          if-no-files-found: error
+          retention-days: 14
