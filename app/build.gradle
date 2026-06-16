@@ -61,7 +61,7 @@ android {
             arg("room.schemaLocation", "$projectDir/schemas".toString())
         }
 
-        applicationId "io.github.forkmaintainers"
+        applicationId "com.MizrahiTefahot.nh"
         minSdk config.minSdkVersion
         targetSdk config.targetSdkVersion
         versionCode 1
